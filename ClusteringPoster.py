@@ -10,6 +10,10 @@ import matplotlib.pyplot as plt
 import sklearn.cluster as cluster
 import sklearn.metrics as skmet
 import cluster_tools as ct
+import shapefile as shp
+import seaborn as sns
+import numpy as np
+import geopandas as gpd
 
 def getDfs(filename):
     """
@@ -49,12 +53,41 @@ def getDfs(filename):
     
     return temp_df, temp_df_tr
 
+def createClusters(df, label1, label2, n = 2):
+    cluster_data = ct.scaler(df[[label1, label2]])
+    cluster_df = cluster_data[0]
+
+    #training the cluster model on the data we have
+    ncluster = n
+    kmeans = cluster.KMeans(n_clusters = ncluster)
+    kmeans.fit(cluster_df)
+    labels = kmeans.labels_
+    df['Groups'] = labels
+
+    fix, ax = plt.subplots()
+
+    ax.scatter(df[label1], 
+               df[label2],
+               c = labels)
+
+    plt.xlabel(label1)
+    plt.ylabel(label2)
+  
+def read_shapefile(sf):
+  #fetching the headings from the shape file
+  fields = [x[0] for x in sf.fields][1:]#fetching the records from the shape file
+  records = [list(i) for i in sf.records()]
+  shps = [s.points for s in sf.shapes()]#converting shapefile data into pandas dataframe
+  df = pd.DataFrame(columns=fields, data=records)#assigning the coordinates
+  df = df.assign(coords=shps)
+  return df  
+  
 #Reading in the data
-CO2_df, CO2_df_tr = getDfs('CO2.csv')
-GDP_df, GDP_df_tr = getDfs('GDP.csv')
-MIG_df, MIG_df_tr = getDfs('Migration.csv')
-RET_df, RET_df_tr = getDfs('Retired.csv')
-HIG_df, HIG_df_tr = getDfs('Higher.csv')
+CO2_df, CO2_df_tr = getDfs('World_Bank_Data/CO2.csv')
+GDP_df, GDP_df_tr = getDfs('World_Bank_Data/GDP.csv')
+MIG_df, MIG_df_tr = getDfs('World_Bank_Data/Migration.csv')
+RET_df, RET_df_tr = getDfs('World_Bank_Data/Retired.csv')
+HIG_df, HIG_df_tr = getDfs('World_Bank_Data/Higher.csv')
 
 #creating list to filter data by
 EU_members = ['Austria', 
@@ -93,7 +126,6 @@ MIG_EU_df = MIG_df.loc[EU_members, '2016']
 RET_EU_df = RET_df.loc[EU_members, '2016']
 HIG_EU_df = HIG_df.loc[EU_members, '2016']
 
-
 EU_df = pd.DataFrame(GDP_EU_df)
 EU_df['GDP'] = EU_df['2016']
 EU_df = EU_df.drop('2016', axis = 1)
@@ -102,36 +134,35 @@ EU_df['Migration'] = MIG_EU_df
 EU_df['Retired'] = RET_EU_df 
 EU_df['Higher'] = HIG_EU_df 
 
-cluster_data = ct.scaler(EU_df[['GDP', 'Higher']])
-cluster_df = cluster_data[0]
+createClusters(EU_df, 'Migration', 'GDP')
 
-#calulating the optimal number of clusters
-x = [x for x in range(2, 20)]
-y = []
+#%%
+#map test
 
-for i in x:
-    ncluster = i
-    kmeans = cluster.KMeans(n_clusters = ncluster)
-    kmeans.fit(cluster_df)
-    labels = kmeans.labels_
-    y.append(skmet.silhouette_score(cluster_df, labels))
+sns.set(style='whitegrid', 
+        palette='pastel', 
+        color_codes=True) 
 
-#creating the plot
-fig, ax = plt.subplots()
-plt.plot(x, y)
+sns.mpl.rc('figure', figsize=(10,6))
 
-#training the cluster model on the data we have
-ncluster = 2
-kmeans = cluster.KMeans(n_clusters = ncluster)
-kmeans.fit(cluster_df)
-labels = kmeans.labels_
+shp_path = r"C:\Users\Georg\OneDrive\Desktop\NUTS_RG_20M_2021_3035.shp"
+sf = shp.Reader(shp_path)
 
-fix, ax = plt.subplots()
+# =============================================================================
+# map_df = read_shapefile(sf)
+# map_df = map_df[map_df['LEVL_CODE'] == 0]
+# map_df['coords'].plot()
+# =============================================================================
 
-ax.scatter(EU_df['GDP'], 
-           EU_df['Higher'],
-           c = labels)
+fig, axel = plt.subplots()
 
-plt.xlabel('Net Migration')
-plt.ylabel('GDP')
-
+map_df = gpd.read_file(shp_path)
+map_df = map_df[map_df['LEVL_CODE'] == 0]
+map_df_blorp = map_df[10:]
+map_df_blorp.plot(ax = axel, color = 'white', edgecolor='black')
+map_df_glrop = map_df[:10]
+map_df_glrop.plot(ax = axel, color = 'red', edgecolor='black')
+map_df_glrop = map_df[14:18]
+map_df_glrop.plot(ax = axel, color = 'blue', edgecolor='black')
+plt.xlim(left = 2500000, right = 7500000)
+plt.ylim(bottom = 1000000, top = 5500000)
