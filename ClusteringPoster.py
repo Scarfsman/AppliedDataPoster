@@ -245,8 +245,7 @@ def linear(t, s, k, t0):
     f = s + k*t
     return f
 
-def poly(t, c0, c1, c2, c3, t0):
-    t = t - t0
+def poly(t, c0, c1, c2, c3):
     f = c0 + c1*t + c2*t**2 + c3*t**3
     return f
 
@@ -281,20 +280,21 @@ def err_ranges(x, func, param, sigma):
         
     return lower, upper, pmix  
 
-years = [int(i) for i in list(target_df.index)]
-initparam = [60, 1, 1, 1, 1960]
+years = [int(i) for i in range(0, len(target_df.index))]
 param, covar = opt.curve_fit(poly, 
                              years, 
-                             target_df['European Union'],
-                             p0 = initparam)
+                             target_df['European Union'])
 
 pop_est = [poly(i, *param) for i in years]
 ax.plot(target_df.index, pop_est, color = 'black')
 
 sigma = np.sqrt(np.diag(covar))
 
-#errorLow, errorUp, uplow = err_ranges(years, poly, param, sigma)
-#plt.fill_between(target_df.index, errorLow, errorUp, alpha = 0.7)
+for p,s in zip(param, sigma):
+    print(p , s)
+
+errorLow, errorUp, uplow = err_ranges(years, poly, param, sigma)
+plt.fill_between(target_df.index, errorLow, errorUp, alpha = 0.7)
 
 # =============================================================================
 # years = [int(i) for i in list(group2_df.index)]
