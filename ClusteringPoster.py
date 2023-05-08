@@ -7,11 +7,13 @@ Created on Tue May  2 13:54:31 2023
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.pylab as plt
 import matplotlib.patches as mpatches
 import sklearn.cluster as cluster
 import sklearn.metrics as skmet
+import scipy.optimize as opt
 import cluster_tools as ct
-import shapefile as shp
+import errors as err
 import seaborn as sns
 import numpy as np
 import geopandas as gpd
@@ -54,7 +56,21 @@ def getDfs(filename):
     
     return temp_df, temp_df_tr
 
-def createClusters(label1, label2, year, n = 2):
+def createClusters(label1, label2, year):
+    """
+    Parameters
+    ----------
+    label1 : The first parameter for generating clusters
+    
+    label2 : the second label for generating clusters
+    
+    year : the year to generate clusters for
+        
+    Returns
+    -------
+    Generates a scatter graph showing a clusters for EU members for the passed
+    parameters in the given year
+    """
     
     #list of EU members with their world bank and EU shpae file labels
     #Used to filter the world bank data and the shape file in order to plot
@@ -110,7 +126,7 @@ def createClusters(label1, label2, year, n = 2):
     cluster_df = cluster_data[0]
 
     #training the cluster model on the data we have
-    ncluster = n
+    ncluster = 2
     kmeans = cluster.KMeans(n_clusters = ncluster)
     kmeans.fit(cluster_df)
     labels = kmeans.labels_
@@ -170,6 +186,9 @@ def createClusters(label1, label2, year, n = 2):
     temp.plot(ax = axel, 
               color = 'Purple', 
               edgecolor='black', )
+    
+    print([i for i in df[df['Groups'] == 0].index])
+    print([i for i in df[df['Groups'] == 1].index])
 
     Group2_Codes = [WB2EU[i] for i in df[df['Groups'] == 1].index]
     temp = map_df.loc[Group2_Codes]
@@ -208,9 +227,79 @@ URB_df, URB_df_tr = getDfs('World_Bank_Data/Urban_pop.csv')
 createClusters('Higher', 'Retired', '1995')
 createClusters('Higher', 'Retired', '2018')
 
+#%%
 
+fig, ax = plt.subplots()
 
+target_df = URB_df_tr.drop('Unnamed: 66')
 
+#RET_df_tr = RET_df_tr.drop('Unnamed: 66')
 
+ax.scatter(target_df.index, target_df['European Union'])
 
+plt.xlabel('Year')
+plt.xticks(rotation = 90)
+
+def linear(t, s, k, t0):
+    t = t-t0
+    f = s + k*t
+    return f
+
+def poly(t, c0, c1, c2, c3, t0):
+    t = t - t0
+    f = c0 + c1*t + c2*t**2 + c3*t**3
+    return f
+
+def err_ranges(x, func, param, sigma):
+    """
+    Calculates the upper and lower limits for the function, parameters and
+    sigmas for single value or array x. Functions values are calculated for 
+    all combinations of +/- sigma and the minimum and maximum is determined.
+    Can be used for all number of parameters and sigmas >=1.
+    
+    This routine can be used in assignment programs.
+    """
+
+    import itertools as iter
+    
+    # initiate arrays for lower and upper limits
+    lower = [func(i, *param) for i in x]
+    upper = lower
+    
+    uplow = []   # list to hold upper and lower limits for parameters
+    for p, s in zip(param, sigma):
+        pmin = p - s
+        pmax = p + s
+        uplow.append((pmin, pmax))
+    
+    pmix = list(iter.product(*uplow))
+    
+    for p in pmix:
+        y = [func(i, *p) for i in x]
+        lower = np.minimum(lower, y)
+        upper = np.maximum(upper, y)
+        
+    return lower, upper, pmix  
+
+years = [int(i) for i in list(target_df.index)]
+initparam = [60, 1, 1, 1, 1960]
+param, covar = opt.curve_fit(poly, 
+                             years, 
+                             target_df['European Union'],
+                             p0 = initparam)
+
+pop_est = [poly(i, *param) for i in years]
+ax.plot(target_df.index, pop_est, color = 'black')
+
+sigma = np.sqrt(np.diag(covar))
+
+#errorLow, errorUp, uplow = err_ranges(years, poly, param, sigma)
+#plt.fill_between(target_df.index, errorLow, errorUp, alpha = 0.7)
+
+# =============================================================================
+# years = [int(i) for i in list(group2_df.index)]
+# param, covar = opt.curve_fit(poly, years, group2_df['mean'])
+# pop_est = [poly(i, *param) for i in years]
+# ax.plot(group2_df.index, pop_est, color = 'black')
+# =============================================================================
 
