@@ -7,13 +7,10 @@ Created on Tue May  2 13:54:31 2023
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.pylab as plt
 import matplotlib.patches as mpatches
 import sklearn.cluster as cluster
-import sklearn.metrics as skmet
 import scipy.optimize as opt
 import cluster_tools as ct
-import errors as err
 import seaborn as sns
 import numpy as np
 import geopandas as gpd
@@ -56,7 +53,7 @@ def getDfs(filename):
     
     return temp_df, temp_df_tr
 
-def createClusters(label1, label2, year):
+def createClusters(label1, label2, year, xlabel, ylabel):
     """
     Parameters
     ----------
@@ -65,6 +62,10 @@ def createClusters(label1, label2, year):
     label2 : the second label for generating clusters
     
     year : the year to generate clusters for
+    
+    xlabel : the label for the x axis
+    
+    ylabel : the label for the y axis
         
     Returns
     -------
@@ -139,13 +140,15 @@ def createClusters(label1, label2, year):
     ax.scatter(temp[label1], 
                temp[label2],
                c = 'purple',
-               edgecolors = 'Black')
+               edgecolors = 'Black',
+               label = 'Group 1')
     
     temp = df[df['Groups'] == 1]
     ax.scatter(temp[label1], 
                temp[label2],
                c = 'yellow',
-               edgecolors = 'black')
+               edgecolors = 'black',
+               label = 'Group 2')
     
     back = ct.backscale(kmeans.cluster_centers_, 
                         cluster_data[1], 
@@ -157,15 +160,17 @@ def createClusters(label1, label2, year):
                c='white', 
                marker = 'd',
                edgecolor = 'black',
-               s = 150)
+               s = 150,
+               label = 'Cluster Centres')
     
     plt.ylim(top = 25, bottom = 5)
     plt.xlim(left = 10, right = 150)
-    plt.xlabel(label1)
-    plt.ylabel(label2)
-    plt.title(year)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title('Demographic Clusters in ' + year, fontsize = 17)
+    plt.legend(loc = "upper left")
     fname = 'scatter_' + year + '.png'
-    plt.savefig(fname)
+    plt.savefig(fname, bbox_inches='tight')
     
     #Generates the Map
     
@@ -186,9 +191,7 @@ def createClusters(label1, label2, year):
     temp.plot(ax = axel, 
               color = 'Purple', 
               edgecolor='black', )
-    
-    print([i for i in df[df['Groups'] == 0].index])
-    print([i for i in df[df['Groups'] == 1].index])
+
 
     Group2_Codes = [WB2EU[i] for i in df[df['Groups'] == 1].index]
     temp = map_df.loc[Group2_Codes]
@@ -209,46 +212,10 @@ def createClusters(label1, label2, year):
     plt.ylim(bottom = 1000000, top = 5500000)
     plt.xticks(color='w')
     plt.yticks(color='w')
-    plt.title(year)
+    axel.ticklabel_format(style='plain')
     fname = 'map_' + year + '.png'
-    plt.savefig(fname)
-    
-#Reading in the data
-CO2_df, CO2_df_tr = getDfs('World_Bank_Data/CO2.csv')
-GDP_df, GDP_df_tr = getDfs('World_Bank_Data/GDP.csv')
-MIG_df, MIG_df_tr = getDfs('World_Bank_Data/Migration.csv')
-RET_df, RET_df_tr = getDfs('World_Bank_Data/Retired.csv')
-HIG_df, HIG_df_tr = getDfs('World_Bank_Data/Higher.csv')
-URB_df, URB_df_tr = getDfs('World_Bank_Data/Urban_pop.csv')
-
-#Creating dataframe to look at information related to EU memeber states 
-#for the metrics of interest
-
-createClusters('Higher', 'Retired', '1995')
-createClusters('Higher', 'Retired', '2018')
-
-#%%
-
-fig, ax = plt.subplots()
-
-target_df = URB_df_tr.drop('Unnamed: 66')
-
-#RET_df_tr = RET_df_tr.drop('Unnamed: 66')
-
-ax.scatter(target_df.index, target_df['European Union'])
-
-plt.xlabel('Year')
-plt.xticks(rotation = 90)
-
-def linear(t, s, k, t0):
-    t = t-t0
-    f = s + k*t
-    return f
-
-def poly(t, c0, c1, c2, c3):
-    f = c0 + c1*t + c2*t**2 + c3*t**3
-    return f
-
+    plt.savefig(fname, bbox_inches='tight')
+        
 def err_ranges(x, func, param, sigma):
     """
     Calculates the upper and lower limits for the function, parameters and
@@ -257,6 +224,9 @@ def err_ranges(x, func, param, sigma):
     Can be used for all number of parameters and sigmas >=1.
     
     This routine can be used in assignment programs.
+    
+    Had issues with passing the a numpy array, I've altered it slightly to
+    accept lists'
     """
 
     import itertools as iter
@@ -278,28 +248,119 @@ def err_ranges(x, func, param, sigma):
         lower = np.minimum(lower, y)
         upper = np.maximum(upper, y)
         
-    return lower, upper, pmix  
+    return lower, upper, pmix
 
-years = [int(i) for i in range(0, len(target_df.index))]
-param, covar = opt.curve_fit(poly, 
-                             years, 
-                             target_df['European Union'])
+def fitEUData(func, initparams, df, title = '', ylabel = ''):
+    '''Generates a graph for the EU data fitted to the function func for the
+    dataframe df from 1990 to 2021. df must be tr. title and ylabel refer to 
+    plt attrributes of the same name. Projects data to 2030'''
+    
+    #Create the dataframe for the fitting portion of the poster
+    target_df = df.loc['1990':].drop('Unnamed: 66')
 
-pop_est = [poly(i, *param) for i in years]
-ax.plot(target_df.index, pop_est, color = 'black')
+    #fit the function
+    #NOTE: I've fitted the function on a list starting from 0 rather then passing
+    # it the year and and doing t = t- t0 in the function, as doing it the later 
+    # way resulted in 12 figure covariances, which did not produce meaningful
+    # confidence intervals.
+    
+    years = [int(i) for i in range(0, len(target_df.index))]
+    param, covar = opt.curve_fit(func, 
+                                 years, 
+                                 target_df['European Union'],
+                                 p0 = initparams)
+    
+    #get uncertainty for 1990 to 2030
+    projection = []
+    
+    for i in range(1990, 2031):
+        projection.append(str(i))
+        
+    years = [int(i) for i in range(0, len(projection))] 
+    
+    pop_est = [func(i, *param) for i in years]
+    sigma = np.sqrt(np.diag(covar))
+    errorLow, errorUp, uplow = err_ranges(years, func, param, sigma)
 
-sigma = np.sqrt(np.diag(covar))
+    #Plotting the data
+    fig, ax = plt.subplots()
 
-for p,s in zip(param, sigma):
-    print(p , s)
+    #plotting the fitted function
+    ax.plot(projection, 
+            pop_est, 
+            color = 'black',
+            label = 'Fitted Function')
 
-errorLow, errorUp, uplow = err_ranges(years, poly, param, sigma)
-plt.fill_between(target_df.index, errorLow, errorUp, alpha = 0.7)
+    #plotting the lower bound of the confidence interval
+    ax.plot(projection, 
+            errorLow, 
+            color = 'black',
+            alpha = 0.3)
 
-# =============================================================================
-# years = [int(i) for i in list(group2_df.index)]
-# param, covar = opt.curve_fit(poly, years, group2_df['mean'])
-# pop_est = [poly(i, *param) for i in years]
-# ax.plot(group2_df.index, pop_est, color = 'black')
-# =============================================================================
+    #plotting the upper bound of the confidence interval
+    ax.plot(projection, 
+            errorUp, 
+            color = 'black',
+            alpha = 0.3)
 
+    #filling the sapce between the points
+    ax.fill_between(projection, 
+                    errorLow, 
+                    errorUp, 
+                    alpha = 0.2, 
+                    color = 'yellow',
+                    label = 'Confidence Interval')
+    
+    #plotting the data points
+    ax.scatter(target_df.index, 
+               target_df['European Union'],
+               edgecolor = 'black',
+               color = 'purple',
+               label = 'Observed Data Points')
+    
+    ax.axvline('2021',
+               color = 'black',
+               linestyle = '--',
+               label = 'Projection',
+               alpha = 0.75)
+
+    #labels
+    plt.xlabel('Year')
+    plt.ylabel(ylabel)
+    plt.title(title, fontsize = 17)
+    plt.xticks(rotation = 90)
+    for n, label in enumerate(ax.xaxis.get_ticklabels()):
+        if n % 5 != 0:
+            label.set_visible(False)
+    plt.legend()
+    
+    #save the figure
+    plt.savefig('FittedData.png')
+
+#define our function to fit
+def poly(t, c0, c1, c2, c3):
+    f = c0 + c1*t + c2*t**2 + c3*t**3
+    return f  
+
+#Reading in the data
+CO2_df, CO2_df_tr = getDfs('World_Bank_Data/CO2.csv')
+GDP_df, GDP_df_tr = getDfs('World_Bank_Data/GDP.csv')
+MIG_df, MIG_df_tr = getDfs('World_Bank_Data/Migration.csv')
+RET_df, RET_df_tr = getDfs('World_Bank_Data/Retired.csv')
+HIG_df, HIG_df_tr = getDfs('World_Bank_Data/Higher.csv')
+URB_df, URB_df_tr = getDfs('World_Bank_Data/Urban_pop.csv')
+
+#Create the clusters for the years of interest
+xlab = 'School enrollment, tertiary (% gross)'
+ylab = 'Population ages 65 and above (% of total population)'
+createClusters('Higher', 'Retired', '1995', xlab, ylab)
+createClusters('Higher', 'Retired', '2018', xlab, ylab)
+
+#fitting the data to our function
+initparams = [14, 0.25, 0.1, 0.1]
+fitEUData(poly,
+          initparams,
+          RET_df_tr,
+          title = 'Percent of People in the EU above 64 Years of Age',
+          ylabel = ylab)
+            
