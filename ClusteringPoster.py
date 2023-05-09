@@ -328,7 +328,7 @@ def fitEUData(func, initparams, df, title = '', ylabel = ''):
     plt.xlabel('Year')
     plt.ylabel(ylabel)
     plt.title(title, fontsize = 17)
-    plt.xticks(rotation = 90)
+    plt.xticks()
     for n, label in enumerate(ax.xaxis.get_ticklabels()):
         if n % 5 != 0:
             label.set_visible(False)
@@ -361,6 +361,6 @@ initparams = [14, 0.25, 0.1, 0.1]
 fitEUData(poly,
           initparams,
           RET_df_tr,
-          title = 'Percent of People in the EU above 64 Years of Age',
+          title = 'Percent of People in the EU above 65 Years of Age',
           ylabel = ylab)
             
